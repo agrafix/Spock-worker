@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                Spock-worker
-version:             0.1.0.0
+version:             0.1.0.1
 synopsis:            Background workers for Spock
 description:         Adds a background-job queue to Spock
 homepage:            http://github.com/agrafix/Spock-worker
@@ -17,7 +17,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Web.Spock.Worker
-  -- other-modules:       
+  other-modules:       Web.Spock.Worker.Queue
   build-depends:       base >=4.6 && <4.7,
                        Spock >=0.4.2.1 && <0.4.3,
                        text >=0.11.3.1 && <1.2,
