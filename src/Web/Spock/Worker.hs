@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 module Web.Spock.Worker
     ( -- * Worker
       WorkQueue
@@ -18,6 +18,9 @@ import Control.Concurrent.STM
 import Control.Monad (forever)
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
+import Control.Exception.Lifted as EX
+import Control.Exception
+
 
 import Data.Time
 import Web.Spock
@@ -66,7 +69,8 @@ newWorker maxSize workHandler errorHandler =
       core q =
           do work <- liftIO $ atomically $ Q.dequeue q
              res <-
-                 do workRes <- runErrorT $ workHandler work
+                 do workRes <- EX.catch (runErrorT $ workHandler work)
+                               (\(e::SomeException) -> return $ Left (show e))
                     case workRes of
                       Left err -> liftIO (errorHandler err work)
                       Right r -> return r
