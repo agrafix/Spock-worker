@@ -33,8 +33,8 @@ enqueue priority value wq@(WorkerQueue q _) =
        then retry
        else modifyTVar' q (M.insertWith (V.++) priority (V.singleton value))
 
-dequeue :: Ord p => WorkerQueue p v -> STM v
-dequeue (WorkerQueue q _) =
+dequeue :: Ord p => p -> WorkerQueue p v -> STM v
+dequeue minP (WorkerQueue q _) =
     do m <- readTVar q
        if M.null m
        then retry
@@ -42,12 +42,14 @@ dequeue (WorkerQueue q _) =
     where
       runDequeue m =
           do let (minPrio, vals) = M.findMin m
-             case V.toList vals of
-               [workEl] ->
-                   do writeTVar q (M.delete minPrio m)
-                      return workEl
-               (workEl:xs) ->
-                   do writeTVar q (M.adjust (const (V.fromList xs)) minPrio m)
-                      return workEl
-               [] ->
-                   error "Library-Error: This should never happen."
+             if minPrio <= minP
+             then case V.toList vals of
+                    [workEl] ->
+                        do writeTVar q (M.delete minPrio m)
+                           return workEl
+                    (workEl:xs) ->
+                        do writeTVar q (M.adjust (const (V.fromList xs)) minPrio m)
+                           return workEl
+                    [] ->
+                        error "Library-Error: This should never happen."
+             else retry

@@ -67,7 +67,8 @@ newWorker maxSize workHandler errorHandler =
        return (WorkQueue q)
     where
       core q =
-          do work <- liftIO $ atomically $ Q.dequeue q
+          do now <- liftIO $ getCurrentTime
+             work <- liftIO $ atomically $ Q.dequeue now q
              res <-
                  do workRes <- EX.catch (runErrorT $ workHandler work)
                                (\(e::SomeException) -> return $ Left (show e))
