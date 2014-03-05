@@ -1,4 +1,5 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
+{-# LANGUAGE RankNTypes, ScopedTypeVariables, OverloadedStrings #-}
 module Web.Spock.Worker
     ( -- * Worker
       WorkQueue
@@ -9,8 +10,12 @@ module Web.Spock.Worker
     , WorkResult (..)
       -- * Error Handeling
     , ErrorHandler, InternalError
+      -- * Tests
+    , htf_thisModulesTests
     )
 where
+
+import Test.Framework
 
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -63,7 +68,7 @@ newWorker :: Int
 newWorker maxSize workHandler errorHandler =
     do heart <- getSpockHeart
        q <- liftIO $ Q.newQueue maxSize
-       _ <- liftIO $ forkIO (runSpockIO heart $ forever $ core q)
+       _ <- liftIO $ forkIO (runSpockIO heart $ core q)
        return (WorkQueue q)
     where
       core q =
@@ -75,7 +80,6 @@ newWorker maxSize workHandler errorHandler =
                     case workRes of
                       Left err -> liftIO (errorHandler err work)
                       Right r -> return r
-             now <- liftIO $ getCurrentTime
              case res of
                WorkRepeatIn secs ->
                    addWork (WorkIn secs) work (WorkQueue q)
@@ -83,6 +87,7 @@ newWorker maxSize workHandler errorHandler =
                    addWork (WorkAt time) work (WorkQueue q)
                _ ->
                    return ()
+             core q
 
 -- | Add a new job to the background worker. If the queue is full this will block
 addWork :: MonadIO m => WorkExecution -> a -> WorkQueue a -> m ()
@@ -95,3 +100,37 @@ addWork we work (WorkQueue q) =
                  WorkIn later -> addUTCTime later now
                  WorkAt ts -> ts
        atomically $ Q.enqueue execTime work q
+
+-- -------------
+-- TESTS
+-- -------------
+
+test_worker =
+    initSpock $ \workVar ->
+    do let checkQueue = checkQueueImpl workVar
+       worker <- newWorker 15 (workHandler workVar) errorHandler
+       addWork WorkNow (1 :: Int) worker
+       sleepMS 1000
+       checkQueue [1]
+       liftIO $
+              do me <- myThreadId
+                 killThread me
+    where
+      sleepMS t =
+          liftIO $ threadDelay (t * 1000)
+      checkQueueImpl var exp =
+          liftIO $
+          do v <- atomically $! readTVar var
+             assertEqual exp v
+      initSpock a =
+          do workResults <- newTVarIO []
+             spock 15150 (SessionCfg "test" 123 42) conn () (a workResults)
+      conn =
+          PCConn $ ConnBuilder (return ()) (const (return ())) pcfg
+      pcfg =
+          PoolCfg 1 1 5
+      errorHandler errMsg _ =
+          error errMsg
+      workHandler workVar job =
+          do liftIO $ atomically $ modifyTVar' workVar (\c -> c ++ [job])
+             return WorkComplete

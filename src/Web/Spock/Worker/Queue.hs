@@ -1,7 +1,13 @@
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 module Web.Spock.Worker.Queue
-    ( WorkerQueue, newQueue, size, enqueue, dequeue, isFull )
+    ( WorkerQueue, newQueue, size, enqueue, dequeue, isFull
+    , htf_thisModulesTests
+    )
 where
 
+import Test.Framework
+
+import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Applicative
 import qualified Data.Map.Strict as M
@@ -53,3 +59,26 @@ dequeue minP (WorkerQueue q _) =
                     [] ->
                         error "Library-Error: This should never happen."
              else retry
+
+-- -------------
+-- TESTS
+-- -------------
+
+test_enqueueDequeue =
+    do q <- newQueue 10
+       atomically $ enqueue (1 :: Int) True q
+       val <- atomically $ dequeue 1 q
+       assertEqual True val
+       atomically $ enqueue (10 :: Int) False q
+       forkIO $ atomically $ enqueue 4 True q
+       val2 <- atomically $ dequeue 5 q
+       assertEqual True val2
+
+test_isFull =
+    do q <- newQueue 2
+       atomically $ enqueue (1 :: Int) True q
+       fullA <- atomically $ isFull q
+       atomically $ enqueue (2 :: Int) False q
+       fullB <- atomically $ isFull q
+       assertEqual False fullA
+       assertEqual True fullB
