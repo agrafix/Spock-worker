@@ -15,6 +15,7 @@ where
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Control.Monad (forever)
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
 
@@ -59,7 +60,7 @@ newWorker :: Int
 newWorker maxSize workHandler errorHandler =
     do heart <- getSpockHeart
        q <- liftIO $ Q.newQueue maxSize
-       _ <- liftIO $ forkIO (runSpockIO heart $ core q)
+       _ <- liftIO $ forkIO (runSpockIO heart $ forever $ core q)
        return (WorkQueue q)
     where
       core q =
