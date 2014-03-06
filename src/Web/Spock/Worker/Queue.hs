@@ -8,11 +8,13 @@ where
 
 import Test.Framework
 
+import Control.Monad
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Applicative
 import Data.List (sortBy)
 import Data.Ord (comparing)
+import Data.Maybe
 
 import qualified Data.Map.Strict as M
 import qualified Data.Vector as V
@@ -111,16 +113,12 @@ enqueue prio value (WorkerQueue qVar) =
        then writeTVar qVar newQ
        else retry
 
-dequeue :: Ord p => p -> WorkerQueue p v -> STM v
+dequeue :: Ord p => p -> WorkerQueue p v -> STM (Maybe v)
 dequeue minP (WorkerQueue qVar) =
     do q <- readTVar qVar
        let (mVal, newQ) = dequeuePQ minP q
-       case mVal of
-         Nothing ->
-             retry
-         Just val ->
-             do writeTVar qVar newQ
-                return val
+       when (isJust mVal) $ writeTVar qVar newQ
+       return mVal
 
 -- -------------
 -- TESTS
