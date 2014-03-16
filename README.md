@@ -1,6 +1,8 @@
 Spock Worker
 ============
 
+[![Build Status](https://drone.io/github.com/agrafix/Spock-worker/status.png)](https://drone.io/github.com/agrafix/Spock-worker/latest)
+
 # Intro
 
 This provides background-workers to Spock. For more info see Hackage.
