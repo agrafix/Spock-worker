@@ -1,7 +1,7 @@
 Spock Worker
 ============
 
-[![Build Status](https://drone.io/github.com/agrafix/Spock-worker/status.png)](https://drone.io/github.com/agrafix/Spock-worker/latest)
+[![Build Status](https://travis-ci.org/agrafix/Spock-worker.svg)](https://travis-ci.org/agrafix/Spock-worker)
 
 # Intro
 
