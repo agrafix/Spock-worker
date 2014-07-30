@@ -4,6 +4,8 @@ module Web.Spock.Worker
     ( -- * Worker
       WorkQueue
     , WorkHandler
+    , WorkerConfig (..)
+    , WorkerConcurrentStrategy (..)
     , newWorker
     , addWork
     , WorkExecution (..)
@@ -20,6 +22,7 @@ import Test.Framework
 import Control.Concurrent
 import Control.Concurrent.STM
 
+import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
 import Control.Exception.Lifted as EX
@@ -58,24 +61,40 @@ data WorkResult
    | WorkRepeatAt UTCTime
    deriving (Show, Eq)
 
+-- | Configure the concurrent behaviour of a worker. If you want tasks executed
+-- concurrently, consider using 'WorkerConcurrentBounded'
+data WorkerConcurrentStrategy
+   = WorkerNoConcurrency
+   | WorkerConcurrentBounded Int
+   | WorkerConcurrentUnbounded
+
+-- | Configure how the worker handles it's task and define the queue size
+data WorkerConfig
+   = WorkerConfig
+   { wc_queueLimit :: Int
+   , wc_concurrent :: WorkerConcurrentStrategy
+   }
+
 -- | Create a new background worker and limit the size of the job queue.
-newWorker :: Int
+newWorker :: WorkerConfig
           -> WorkHandler conn sess st a
           -> ErrorHandler a
           -> SpockM conn sess st (WorkQueue a)
-newWorker maxSize workHandler errorHandler =
+newWorker wc workHandler errorHandler =
     do heart <- getSpockHeart
-       q <- liftIO $ Q.newQueue maxSize
-       _ <- liftIO $ forkIO (workProcessor q workHandler errorHandler heart)
+       q <- liftIO $ Q.newQueue (wc_queueLimit wc)
+       _ <- liftIO $ forkIO (workProcessor q workHandler errorHandler heart (wc_concurrent wc))
        return (WorkQueue q)
 
 workProcessor :: Q.WorkerQueue UTCTime a
               -> WorkHandler conn sess st a
               -> ErrorHandler a
               -> WebState conn sess st
+              -> WorkerConcurrentStrategy
               -> IO ()
-workProcessor q workHandler errorHandler spockCore =
-    loop
+workProcessor q workHandler errorHandler spockCore concurrentStrategy =
+    do runningTasksVar <- newTVarIO 0
+       loop runningTasksVar
     where
       runWork work =
           do workRes <-
@@ -84,23 +103,39 @@ workProcessor q workHandler errorHandler spockCore =
              case workRes of
                Left err -> errorHandler err work
                Right r -> return r
-      loop =
+
+      loop runningTasksV =
           do now <- getCurrentTime
              mWork <- atomically $ Q.dequeue now q
              case mWork of
                Nothing ->
                    do threadDelay (1000 * 1000) -- 1 sec
-                      loop
+                      loop runningTasksV
                Just work ->
-                   do res <- runWork work
-                      case res of
-                        WorkRepeatIn secs ->
-                            addWork (WorkIn secs) work (WorkQueue q)
-                        WorkRepeatAt time ->
-                            addWork (WorkAt time) work (WorkQueue q)
-                        _ ->
-                            return ()
-                      loop
+                   do case concurrentStrategy of
+                        WorkerConcurrentBounded limit ->
+                            do atomically $
+                                 do runningTasks <- readTVar runningTasksV
+                                    when (runningTasks >= limit) retry
+                               _ <- forkIO $ launchWork runningTasksV work
+                               return ()
+                        WorkerNoConcurrency ->
+                            launchWork runningTasksV work
+                        WorkerConcurrentUnbounded ->
+                            do _ <- forkIO $ launchWork runningTasksV work
+                               return ()
+                      loop runningTasksV
+
+      launchWork runningTasksV work =
+          do atomically $ modifyTVar runningTasksV (\x -> x + 1)
+             res <- (runWork work `EX.finally` (atomically $ modifyTVar runningTasksV (\x -> x - 1)))
+             case res of
+               WorkRepeatIn secs ->
+                   addWork (WorkIn secs) work (WorkQueue q)
+               WorkRepeatAt time ->
+                   addWork (WorkAt time) work (WorkQueue q)
+               _ ->
+                   return ()
 
 -- | Add a new job to the background worker. If the queue is full this will block
 addWork :: MonadIO m => WorkExecution -> a -> WorkQueue a -> m ()
