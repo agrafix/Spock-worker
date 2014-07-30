@@ -11,7 +11,7 @@ module Web.Spock.Worker
     , WorkExecution (..)
     , WorkResult (..)
       -- * Error Handeling
-    , ErrorHandler, InternalError
+    , ErrorHandler(..), InternalError
       -- * Tests
     , htf_thisModulesTests
     )
@@ -36,8 +36,9 @@ type InternalError = String
 
 -- | Describe how you want to handle errors. Make sure you catch all exceptions
 -- that can happen inside this handler, otherwise the worker will crash!
-type ErrorHandler a
-   = InternalError -> a -> IO WorkResult
+data ErrorHandler conn sess st a
+   = ErrorHandlerIO (InternalError -> a -> IO WorkResult)
+   | ErrorHandlerSpock (InternalError -> a -> (WebStateM conn sess st) WorkResult)
 
 -- | Describe how you want jobs in the queue to be performed
 type WorkHandler conn sess st a
@@ -78,7 +79,7 @@ data WorkerConfig
 -- | Create a new background worker and limit the size of the job queue.
 newWorker :: WorkerConfig
           -> WorkHandler conn sess st a
-          -> ErrorHandler a
+          -> ErrorHandler conn sess st a
           -> SpockM conn sess st (WorkQueue a)
 newWorker wc workHandler errorHandler =
     do heart <- getSpockHeart
@@ -88,7 +89,7 @@ newWorker wc workHandler errorHandler =
 
 workProcessor :: Q.WorkerQueue UTCTime a
               -> WorkHandler conn sess st a
-              -> ErrorHandler a
+              -> ErrorHandler conn sess st a
               -> WebState conn sess st
               -> WorkerConcurrentStrategy
               -> IO ()
@@ -101,7 +102,12 @@ workProcessor q workHandler errorHandler spockCore concurrentStrategy =
                  EX.catch (runSpockIO spockCore $ runErrorT $ workHandler work)
                        (\(e::SomeException) -> return $ Left (show e))
              case workRes of
-               Left err -> errorHandler err work
+               Left err ->
+                   case errorHandler of
+                     ErrorHandlerIO h ->
+                         h err work
+                     ErrorHandlerSpock h ->
+                         runSpockIO spockCore $ h err work
                Right r -> return r
 
       loop runningTasksV =
