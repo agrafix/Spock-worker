@@ -26,10 +26,9 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
 import Control.Exception.Lifted as EX
-import Control.Exception
 
 import Data.Time
-import Web.Spock
+import Web.Spock.Shared
 import qualified Web.Spock.Worker.Queue as Q
 
 type InternalError = String
@@ -46,7 +45,7 @@ type WorkHandler conn sess st a
 
 -- | The queue containing scheduled jobs
 newtype WorkQueue a
-   = WorkQueue { unWorkQueue :: Q.WorkerQueue UTCTime a }
+   = WorkQueue { _unWorkQueue :: Q.WorkerQueue UTCTime a }
 
 -- | Describes when a job should be executed
 data WorkExecution
@@ -77,14 +76,15 @@ data WorkerConfig
    }
 
 -- | Create a new background worker and limit the size of the job queue.
-newWorker :: WorkerConfig
+newWorker :: (MonadTrans t, Monad (t (WebStateM conn sess st)))
+          => WorkerConfig
           -> WorkHandler conn sess st a
           -> ErrorHandler conn sess st a
-          -> SpockM conn sess st (WorkQueue a)
+          -> t (WebStateM conn sess st) (WorkQueue a)
 newWorker wc workHandler errorHandler =
     do heart <- getSpockHeart
-       q <- liftIO $ Q.newQueue (wc_queueLimit wc)
-       _ <- liftIO $ forkIO (workProcessor q workHandler errorHandler heart (wc_concurrent wc))
+       q <- lift . liftIO $ Q.newQueue (wc_queueLimit wc)
+       _ <- lift . liftIO $ forkIO (workProcessor q workHandler errorHandler heart (wc_concurrent wc))
        return (WorkQueue q)
 
 workProcessor :: Q.WorkerQueue UTCTime a

@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Web.Spock.Worker.Queue
     ( WorkerQueue, newQueue, size, enqueue, dequeue, isFull
+    , toListPQ, fromListPQ
     , htf_thisModulesTests
     )
 where
@@ -9,11 +10,8 @@ where
 import Test.Framework
 
 import Control.Monad
-import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Applicative
-import Data.List (sortBy)
-import Data.Ord (comparing)
 import Data.Maybe
 
 import qualified Data.Map.Strict as M
@@ -21,24 +19,24 @@ import qualified Data.Vector as V
 
 data PureQueue p v
    = PureQueue
-   { pq_container :: M.Map p (V.Vector v)
-   , pq_maxSize :: Int
-   }
+   { pq_container :: !(M.Map p (V.Vector v))
+   , pq_maxSize :: !Int
+   } deriving (Show, Eq)
 
 emptyPQ :: Int -> PureQueue p v
-emptyPQ maxSize =
-    PureQueue M.empty maxSize
+emptyPQ maxQueueSize =
+    PureQueue M.empty maxQueueSize
 
 sizePQ :: PureQueue p v -> Int
 sizePQ (PureQueue m _) =
     M.size m
 
 isFullPQ :: PureQueue p v -> Bool
-isFullPQ pq@(PureQueue _ maxSize) =
-    sizePQ pq >= maxSize
+isFullPQ pq =
+    sizePQ pq >= (pq_maxSize pq)
 
 toListPQ :: Ord p => PureQueue p v -> [(p, [v])]
-toListPQ pq@(PureQueue m _) =
+toListPQ (PureQueue m _) =
     map (\(k, v) -> (k, V.toList v)) (M.toList m)
 
 fromListPQ :: Ord p => Int -> [(p, [v])] -> Maybe (PureQueue p v)
@@ -70,7 +68,7 @@ dequeuePQ bound pq =
     removePrio $ dequeuePQ' bound pq
     where
       removePrio (Nothing, q) = (Nothing, q)
-      removePrio (Just (p, v), q) = (Just v, q)
+      removePrio (Just (_, v), q) = (Just v, q)
 
 dequeuePQ' :: Ord p => p -> PureQueue p v -> (Maybe (p, v), PureQueue p v)
 dequeuePQ' prioBound pq@(PureQueue m _)
@@ -124,8 +122,11 @@ dequeue minP (WorkerQueue qVar) =
 -- TESTS
 -- -------------
 
+tAddToMap :: Ord k => k -> a -> M.Map k [a] -> M.Map k [a]
 tAddToMap k val m =
     M.insertWith (++) k [val] m
+
+tDeq :: Ord k => k -> PureQueue k a -> M.Map k [a]
 tDeq maxP q
     | sizePQ q == 0 =
         M.empty
@@ -136,11 +137,14 @@ tDeq maxP q
                  M.empty
              Just (k, val) ->
                  tAddToMap k val (tDeq maxP newQ)
+
+tMappifyInput :: Ord k => [(k, a)] -> M.Map k [a]
 tMappifyInput xs =
     foldl (\m (k, v) ->
                tAddToMap k v m
           ) M.empty xs
 
+prop_enqueueDequeuePQ :: [(Int, Int)] -> Bool
 prop_enqueueDequeuePQ xs =
     let pq = foldl (\q (prio :: Int, el :: Int) ->
                         let (ok, newPQ) = enqueuePQ prio el q
@@ -149,12 +153,14 @@ prop_enqueueDequeuePQ xs =
         maxP = maxPrioPQ pq
     in (tMappifyInput xs == tDeq maxP pq)
 
+prop_onlyDequeueBelowPrio :: Int -> [(Int, Int)] -> Bool
 prop_onlyDequeueBelowPrio prio xs =
     let xs' = M.toList $ tMappifyInput xs
         Just pq = fromListPQ (length xs) (xs' :: [(Int, [Int])])
         filtered = filter (\(p, _) -> p <= prio) xs
     in (tMappifyInput filtered == tDeq prio pq)
 
+prop_isFull :: Int -> [(Int, Int)] -> Property
 prop_isFull limit xs =
     limit > 0 ==>
     let xs' = M.toList $ tMappifyInput xs
@@ -167,7 +173,9 @@ prop_isFull limit xs =
          Nothing ->
              limit < (length xs')
 
+test_dontEnqueueIfFull :: IO ()
 test_dontEnqueueIfFull =
     let pq = emptyPQ 0
         (ok, newPQ) = enqueuePQ (0 :: Int) False pq
-    in assertBool (not ok)
+    in do assertBool (not ok)
+          assertEqual pq newPQ

@@ -2,6 +2,7 @@ Spock Worker
 ============
 
 [![Build Status](https://travis-ci.org/agrafix/Spock-worker.svg)](https://travis-ci.org/agrafix/Spock-worker)
+[![Hackage Deps](https://img.shields.io/hackage-deps/v/Spock-worker.svg)](http://packdeps.haskellers.com/reverse/Spock-worker)
 
 # Intro
 
