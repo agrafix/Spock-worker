@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -F -pgmF htfpp #-}
 {-# LANGUAGE RankNTypes, ScopedTypeVariables, OverloadedStrings #-}
 module Web.Spock.Worker
     ( -- * Worker
@@ -12,24 +11,18 @@ module Web.Spock.Worker
     , WorkResult (..)
       -- * Error Handeling
     , ErrorHandler(..), InternalError
-      -- * Tests
-    , htf_thisModulesTests
     )
 where
 
-import Test.Framework
-
 import Control.Concurrent
 import Control.Concurrent.STM
-
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Error
 import Control.Exception.Lifted as EX
-
 import Data.Time
 import Web.Spock.Shared
-import qualified Web.Spock.Worker.Queue as Q
+import qualified Web.Spock.Worker.Internal.Queue as Q
 
 type InternalError = String
 
