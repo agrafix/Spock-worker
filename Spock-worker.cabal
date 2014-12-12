@@ -45,3 +45,7 @@ test-suite SpockWorkerTests
                        containers,
                        stm,
                        vector
+
+source-repository head
+  type:     git
+  location: git://github.com/agrafix/Spock-worker.git
