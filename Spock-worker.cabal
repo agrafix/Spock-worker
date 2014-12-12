@@ -1,5 +1,5 @@
 name:                Spock-worker
-version:             0.2.1.1
+version:             0.2.1.2
 synopsis:            Background workers for Spock
 description:         Adds a background-job queue to Spock
 homepage:            http://github.com/agrafix/Spock-worker
@@ -22,7 +22,7 @@ library
   default-language:    Haskell2010
   build-depends:
                        Spock >=0.7.2,
-                       base >=4.6,
+                       base >=4.6 && < 5,
                        containers >=0.5,
                        lifted-base,
                        mtl,
@@ -41,7 +41,7 @@ test-suite SpockWorkerTests
   build-depends:
                        HTF >=0.12.2.1,
                        Spock-worker,
-                       base >=4.6,
+                       base >=4.6 && < 5,
                        containers,
                        stm,
                        vector
