@@ -11,6 +11,7 @@ copyright:           (c) 2014 Alexander Thiemann
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
+tested-with:         GHC==7.6.3, GHC==7.8.3
 
 library
   exposed-modules:
