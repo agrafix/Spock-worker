@@ -38,6 +38,8 @@ test-suite SpockWorkerTests
   main-is:             Tests.hs
   hs-source-dirs:      test
   default-language:    Haskell2010
+  other-modules:
+                       Web.Spock.Worker.Internal.QueueTests
   build-depends:
                        HTF >=0.12.2.1,
                        Spock-worker,
