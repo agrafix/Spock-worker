@@ -4,10 +4,10 @@ module Web.Spock.Worker.Internal.QueueTests
     (  htf_thisModulesTests )
 where
 
-import Web.Spock.Worker.Internal.Queue
+import           Web.Spock.Worker.Internal.Queue
 
-import Test.Framework
-import qualified Data.Map.Strict as M
+import qualified Data.Map.Strict                 as M
+import           Test.Framework
 
 tAddToMap :: Ord k => k -> a -> M.Map k [a] -> M.Map k [a]
 tAddToMap k val m =
