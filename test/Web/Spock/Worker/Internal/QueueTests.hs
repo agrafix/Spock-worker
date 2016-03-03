@@ -6,13 +6,8 @@ where
 
 import Web.Spock.Worker.Internal.Queue
 
-import Control.Applicative
-import Control.Concurrent.STM
-import Control.Monad
-import Data.Maybe
 import Test.Framework
 import qualified Data.Map.Strict as M
-import qualified Data.Vector as V
 
 tAddToMap :: Ord k => k -> a -> M.Map k [a] -> M.Map k [a]
 tAddToMap k val m =

@@ -1,21 +1,20 @@
 module Web.Spock.Worker.Internal.Queue where
 
-import Control.Applicative
-import Control.Concurrent.STM
-import Control.Monad
-import Data.Maybe
-import qualified Data.Map.Strict as M
-import qualified Data.Vector as V
+import           Control.Arrow          (second)
+import           Control.Concurrent.STM
+import           Control.Monad
+import qualified Data.Map.Strict        as M
+import           Data.Maybe
+import qualified Data.Vector            as V
 
 data PureQueue p v
    = PureQueue
    { pq_container :: !(M.Map p (V.Vector v))
-   , pq_maxSize :: !Int
+   , pq_maxSize   :: !Int
    } deriving (Show, Eq)
 
 emptyPQ :: Int -> PureQueue p v
-emptyPQ maxQueueSize =
-    PureQueue M.empty maxQueueSize
+emptyPQ = PureQueue M.empty
 
 sizePQ :: PureQueue p v -> Int
 sizePQ (PureQueue m _) =
@@ -23,11 +22,11 @@ sizePQ (PureQueue m _) =
 
 isFullPQ :: PureQueue p v -> Bool
 isFullPQ pq =
-    sizePQ pq >= (pq_maxSize pq)
+    sizePQ pq >= pq_maxSize pq
 
 toListPQ :: Ord p => PureQueue p v -> [(p, [v])]
 toListPQ (PureQueue m _) =
-    map (\(k, v) -> (k, V.toList v)) (M.toList m)
+    map (second V.toList) (M.toList m)
 
 fromListPQ :: Ord p => Int -> [(p, [v])] -> Maybe (PureQueue p v)
 fromListPQ limit kv
@@ -86,12 +85,10 @@ newQueue limit =
     WorkerQueue <$> newTVarIO (emptyPQ limit)
 
 size :: WorkerQueue p v -> STM Int
-size (WorkerQueue qVar) =
-    readTVar qVar >>= (return . sizePQ)
+size (WorkerQueue qVar) = liftM sizePQ (readTVar qVar)
 
 isFull :: WorkerQueue p v -> STM Bool
-isFull (WorkerQueue qVar) =
-    readTVar qVar >>= (return . isFullPQ)
+isFull (WorkerQueue qVar) = liftM isFullPQ (readTVar qVar)
 
 enqueue :: Ord p => p -> v -> WorkerQueue p v -> STM ()
 enqueue prio value (WorkerQueue qVar) =

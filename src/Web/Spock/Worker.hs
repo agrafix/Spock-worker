@@ -1,40 +1,45 @@
-{-# LANGUAGE RankNTypes, ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Web.Spock.Worker
-    ( -- * Worker
-      WorkQueue
-    , WorkHandler
+    ( -- * Define a Worker
+      WorkHandler
     , WorkerConfig (..)
     , WorkerConcurrentStrategy (..)
+    , WorkerDef (..)
     , newWorker
-    , addWork
-    , WorkExecution (..)
     , WorkResult (..)
+      -- * Enqueue work
+    , WorkQueue, WorkExecution (..), addWork
       -- * Error Handeling
-    , ErrorHandler(..), InternalError
+    , ErrorHandler(..), InternalError (..)
     )
 where
 
-import Control.Concurrent
-import Control.Concurrent.STM
-import Control.Monad
-import Control.Monad.Trans
-import Control.Monad.Trans.Error
-import Control.Exception.Lifted as EX
-import Data.Time
-import Web.Spock.Shared
+import           Control.Concurrent
+import           Control.Concurrent.STM
+import           Control.Error
+import           Control.Exception.Lifted        as EX
+import           Control.Monad
+import           Control.Monad.Trans
+import           Data.Time
+import           Web.Spock.Shared
 import qualified Web.Spock.Worker.Internal.Queue as Q
 
-type InternalError = String
+-- | An error from a worker
+data InternalError a
+   = InternalErrorMsg String
+   | InternalError a
 
 -- | Describe how you want to handle errors. Make sure you catch all exceptions
 -- that can happen inside this handler, otherwise the worker will crash!
-data ErrorHandler conn sess st a
-   = ErrorHandlerIO (InternalError -> a -> IO WorkResult)
-   | ErrorHandlerSpock (InternalError -> a -> (WebStateM conn sess st) WorkResult)
+data ErrorHandler conn sess st err a
+   = ErrorHandlerIO ((InternalError err) -> a -> IO WorkResult)
+   | ErrorHandlerSpock ((InternalError err) -> a -> (WebStateM conn sess st) WorkResult)
 
 -- | Describe how you want jobs in the queue to be performed
-type WorkHandler conn sess st a
-   = a -> ErrorT InternalError (WebStateM conn sess st) WorkResult
+type WorkHandler conn sess st err a
+   = a -> ExceptT (InternalError err) (WebStateM conn sess st) WorkResult
 
 -- | The queue containing scheduled jobs
 newtype WorkQueue a
@@ -68,21 +73,30 @@ data WorkerConfig
    , wc_concurrent :: WorkerConcurrentStrategy
    }
 
+-- | Define a worker
+data WorkerDef conn sess st err a
+   = WorkerDef
+   { wd_config       :: WorkerConfig
+   , wd_handler      :: WorkHandler conn sess st err a
+   , wd_errorHandler :: ErrorHandler conn sess st err a
+   }
+
 -- | Create a new background worker and limit the size of the job queue.
 newWorker :: (MonadTrans t, Monad (t (WebStateM conn sess st)))
-          => WorkerConfig
-          -> WorkHandler conn sess st a
-          -> ErrorHandler conn sess st a
+          => WorkerDef conn sess st err a
           -> t (WebStateM conn sess st) (WorkQueue a)
-newWorker wc workHandler errorHandler =
-    do heart <- getSpockHeart
+newWorker wdef =
+    do let wc = wd_config wdef
+           workHandler = wd_handler wdef
+           errorHandler = wd_errorHandler wdef
+       heart <- getSpockHeart
        q <- lift . liftIO $ Q.newQueue (wc_queueLimit wc)
        _ <- lift . liftIO $ forkIO (workProcessor q workHandler errorHandler heart (wc_concurrent wc))
        return (WorkQueue q)
 
 workProcessor :: Q.WorkerQueue UTCTime a
-              -> WorkHandler conn sess st a
-              -> ErrorHandler conn sess st a
+              -> WorkHandler conn sess st err a
+              -> ErrorHandler conn sess st err a
               -> WebState conn sess st
               -> WorkerConcurrentStrategy
               -> IO ()
@@ -92,17 +106,16 @@ workProcessor q workHandler errorHandler spockCore concurrentStrategy =
     where
       runWork work =
           do workRes <-
-                 EX.catch (runSpockIO spockCore $ runErrorT $ workHandler work)
-                       (\(e::SomeException) -> return $ Left (show e))
+                 EX.catch (runSpockIO spockCore $ runExceptT $ workHandler work)
+                       (\(e::SomeException) -> return $ Left (InternalErrorMsg $ show e))
              case workRes of
-               Left err ->
+               Left errMsg ->
                    case errorHandler of
                      ErrorHandlerIO h ->
-                         h err work
+                         h errMsg work
                      ErrorHandlerSpock h ->
-                         runSpockIO spockCore $ h err work
+                         runSpockIO spockCore $ h errMsg work
                Right r -> return r
-
       loop runningTasksV =
           do now <- getCurrentTime
              mWork <- atomically $ Q.dequeue now q
@@ -126,7 +139,7 @@ workProcessor q workHandler errorHandler spockCore concurrentStrategy =
                       loop runningTasksV
 
       launchWork runningTasksV work =
-          do atomically $ modifyTVar runningTasksV (\x -> x + 1)
+          do atomically $ modifyTVar runningTasksV (+ 1)
              res <- (runWork work `EX.finally` (atomically $ modifyTVar runningTasksV (\x -> x - 1)))
              case res of
                WorkRepeatIn secs ->
