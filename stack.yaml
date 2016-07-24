@@ -2,7 +2,7 @@ resolver: lts-5.8
 packages:
 - '.'
 - location:
-      git: git@github.com:agrafix/Spock
+      git: https://github.com/agrafix/Spock.git
       commit: 2c60a48b2c0be0768071cc1b3c7f14590ffcc7d6
   subdirs:
     - Spock
