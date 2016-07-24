@@ -16,14 +16,14 @@ module Web.Spock.Worker
     )
 where
 
-import           Control.Concurrent
-import           Control.Concurrent.STM
-import           Control.Error
-import           Control.Exception.Lifted        as EX
-import           Control.Monad
-import           Control.Monad.Trans
-import           Data.Time
-import           Web.Spock.Shared
+import Control.Concurrent
+import Control.Concurrent.STM
+import Control.Error
+import Control.Exception.Lifted as EX
+import Control.Monad
+import Control.Monad.Trans
+import Data.Time
+import Web.Spock
 import qualified Web.Spock.Worker.Internal.Queue as Q
 
 -- | An error from a worker
