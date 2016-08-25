@@ -1,5 +1,5 @@
 name:                Spock-worker
-version:             0.3.0.0
+version:             0.3.1.0
 synopsis:            Background workers for Spock
 description:         Adds a background-job queue to Spock
 homepage:            http://github.com/agrafix/Spock-worker
