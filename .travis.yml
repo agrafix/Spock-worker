@@ -10,15 +10,18 @@ addons:
     packages:
     - libgmp-dev
 
+env:
+  - STACK_BUILD_MODE="test" STACK_ARGS="" STACK_YAML=stack.yaml
+  - STACK_BUILD_MODE="test" STACK_ARGS="--resolver nightly" STACK_YAML=stack.yaml
+
 before_install:
   - mkdir -p ~/.local/bin
   - export PATH=$HOME/.local/bin:$PATH
   - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-  - stack --no-terminal setup
 
 install:
-    - stack setup --no-terminal
-    - stack build --only-snapshot --no-terminal
+    - stack $STACK_ARGS setup --no-terminal
+    - stack $STACK_ARGS build --only-snapshot --no-terminal
 
 script:
-    - stack test --pedantic --no-terminal --skip-ghc-check
+    - stack $STACK_ARGS $STACK_BUILD_MODE --pedantic --no-terminal --skip-ghc-check

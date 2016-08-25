@@ -7,11 +7,11 @@ license:             MIT
 license-file:        LICENSE
 author:              Alexander Thiemann <mail@athiemann.net>
 maintainer:          mail@athiemann.net
-copyright:           (c) 2014 Alexander Thiemann
+copyright:           (c) 2014 - 2016 Alexander Thiemann
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
-tested-with:         GHC==7.10.3
+tested-with:         GHC==7.10.3, GHC==8.0.1
 
 library
   exposed-modules:

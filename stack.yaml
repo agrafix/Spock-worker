@@ -1,9 +1,9 @@
-resolver: lts-5.8
+resolver: lts-6.13
 packages:
 - '.'
 - location:
       git: https://github.com/agrafix/Spock.git
-      commit: 2c60a48b2c0be0768071cc1b3c7f14590ffcc7d6
+      commit: 77333a2de5dea0dc8eba9432ab16864e93e5d70e
   subdirs:
     - Spock
     - Spock-core
