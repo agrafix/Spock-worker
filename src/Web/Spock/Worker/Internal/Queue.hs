@@ -24,7 +24,7 @@ isFullPQ :: PureQueue p v -> Bool
 isFullPQ pq =
     sizePQ pq >= pq_maxSize pq
 
-toListPQ :: Ord p => PureQueue p v -> [(p, [v])]
+toListPQ :: PureQueue p v -> [(p, [v])]
 toListPQ (PureQueue m _) =
     map (second V.toList) (M.toList m)
 
@@ -37,7 +37,7 @@ fromListPQ limit kv
                    (PureQueue (M.insert k (V.fromList v) content) limit)
               ) (emptyPQ limit) kv
 
-maxPrioPQ :: Ord p => PureQueue p v -> p
+maxPrioPQ :: PureQueue p v -> p
 maxPrioPQ (PureQueue m _) =
     fst (M.findMax m)
 
